@@ -1,0 +1,269 @@
+-- 1. Load the data
+
+CREATE SCHEMA IF NOT EXISTS pandemic;
+
+USE pandemic;
+
+SELECT 
+    COUNT(*) count
+FROM
+    infectious_cases;
+
+
+--2. Normalise the tables
+
+--2.1 Create regions table
+
+CREATE TABLE regions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    entity_name VARCHAR(100) NOT NULL,
+    entity_code VARCHAR(10)
+);
+
+INSERT INTO regions (entity_name, entity_code)
+SELECT DISTINCT Entity, Code 
+FROM infectious_cases;
+
+SELECT *
+FROM regions;
+
+--2.2 Create diseases table
+
+CREATE TABLE diseases (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    disease_name VARCHAR(20) NOT NULL
+);
+
+INSERT INTO diseases (disease_name) VALUES
+('yaws'),
+('polio'),
+('guinea_worm'),
+('rabies'),
+('malaria'),
+('hiv'),
+('tuberculosis'),
+('smallpox'),
+('cholera');
+
+SELECT *
+FROM diseases;
+
+--2.3. Create disease_cases table
+
+CREATE TABLE disease_cases (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    region_id INT NOT NULL,
+    disease_id INT NOT NULL,
+    year INT NOT NULL,
+    number_of_cases INT,
+    FOREIGN KEY (region_id)
+        REFERENCES regions (id),
+    FOREIGN KEY (disease_id)
+        REFERENCES diseases (id)
+);
+
+--2.4 Change text type to int 
+
+SET SQL_SAFE_UPDATES = 0;
+
+UPDATE infectious_cases SET Number_yaws = NULL WHERE Number_yaws = '';
+UPDATE infectious_cases SET Number_rabies = NULL WHERE Number_rabies = '';
+UPDATE infectious_cases SET Number_malaria = NULL WHERE Number_malaria = '';
+UPDATE infectious_cases SET Number_hiv = NULL WHERE Number_hiv = '';
+UPDATE infectious_cases SET Number_tuberculosis = NULL WHERE Number_tuberculosis = '';
+UPDATE infectious_cases SET Number_smallpox = NULL WHERE Number_smallpox = '';
+UPDATE infectious_cases SET Number_cholera_cases = NULL WHERE Number_cholera_cases = '';
+
+ALTER TABLE infectious_cases 
+MODIFY COLUMN Number_yaws INT DEFAULT NULL,
+MODIFY COLUMN Number_rabies INT DEFAULT NULL,
+MODIFY COLUMN Number_malaria INT DEFAULT NULL,
+MODIFY COLUMN Number_hiv INT DEFAULT NULL,
+MODIFY COLUMN Number_tuberculosis INT DEFAULT NULL,
+MODIFY COLUMN Number_smallpox INT DEFAULT NULL,
+MODIFY COLUMN Number_cholera_cases INT DEFAULT NULL;
+
+SET SQL_SAFE_UPDATES = 1;
+
+--2.5 Insert data to disease_cases table 
+
+-- Yaws
+INSERT INTO disease_cases (region_id, disease_id, year, number_of_cases)
+SELECT r.id, d.id, ic.Year, ic.Number_yaws
+FROM infectious_cases ic
+JOIN regions r ON r.entity_code = ic.Code
+JOIN diseases d ON d.disease_name = 'yaws'
+WHERE ic.Number_yaws IS NOT NULL;
+
+-- Polio
+INSERT INTO disease_cases (region_id, disease_id, year, number_of_cases)
+SELECT r.id, d.id, ic.Year, ic.polio_cases
+FROM infectious_cases ic
+JOIN regions r ON r.entity_code = ic.Code
+JOIN diseases d ON d.disease_name = 'polio'
+WHERE ic.polio_cases IS NOT NULL;
+
+-- Guinea Worm
+INSERT INTO disease_cases (region_id, disease_id, year, number_of_cases)
+SELECT r.id, d.id, ic.Year, ic.cases_guinea_worm
+FROM infectious_cases ic
+JOIN regions r ON r.entity_code = ic.Code
+JOIN diseases d ON d.disease_name = 'guinea_worm'
+WHERE ic.cases_guinea_worm IS NOT NULL;
+
+-- Rabies
+INSERT INTO disease_cases (region_id, disease_id, year, number_of_cases)
+SELECT r.id, d.id, ic.Year, ic.Number_rabies
+FROM infectious_cases ic
+JOIN regions r ON r.entity_code = ic.Code
+JOIN diseases d ON d.disease_name = 'rabies'
+WHERE ic.Number_rabies IS NOT NULL;
+
+-- Malaria
+INSERT INTO disease_cases (region_id, disease_id, year, number_of_cases)
+SELECT r.id, d.id, ic.Year, ic.Number_malaria
+FROM infectious_cases ic
+JOIN regions r ON r.entity_code = ic.Code
+JOIN diseases d ON d.disease_name = 'malaria'
+WHERE ic.Number_malaria IS NOT NULL;
+
+-- HIV
+INSERT INTO disease_cases (region_id, disease_id, year, number_of_cases)
+SELECT r.id, d.id, ic.Year, ic.Number_hiv
+FROM infectious_cases ic
+JOIN regions r ON r.entity_code = ic.Code
+JOIN diseases d ON d.disease_name = 'hiv'
+WHERE ic.Number_hiv IS NOT NULL;
+
+-- Tuberculosis
+INSERT INTO disease_cases (region_id, disease_id, year, number_of_cases)
+SELECT r.id, d.id, ic.Year, ic.Number_tuberculosis
+FROM infectious_cases ic
+JOIN regions r ON r.entity_code = ic.Code
+JOIN diseases d ON d.disease_name = 'tuberculosis'
+WHERE ic.Number_tuberculosis IS NOT NULL;
+
+-- Smallpox
+INSERT INTO disease_cases (region_id, disease_id, year, number_of_cases)
+SELECT r.id, d.id, ic.Year, ic.Number_smallpox
+FROM infectious_cases ic
+JOIN regions r ON r.entity_code = ic.Code
+JOIN diseases d ON d.disease_name = 'smallpox'
+WHERE ic.Number_smallpox IS NOT NULL;
+
+-- Cholera
+INSERT INTO disease_cases (region_id, disease_id, year, number_of_cases)
+SELECT r.id, d.id, ic.Year, ic.Number_cholera_cases
+FROM infectious_cases ic
+JOIN regions r ON r.entity_code = ic.Code
+JOIN diseases d ON d.disease_name = 'cholera'
+WHERE ic.Number_cholera_cases IS NOT NULL;
+
+select *
+from disease_cases;
+
+--2.6 Drop table infectious_cases 
+
+DROP TABLE infectious_cases;
+
+
+--3. Select the number of cases of rabies
+
+SELECT 
+    r.entity_code,
+    r.entity_name,
+    AVG(dc.number_of_cases) average,
+    MIN(dc.number_of_cases) minimum,
+    MAX(dc.number_of_cases) maximum,
+    SUM(dc.number_of_cases) total
+FROM
+    disease_cases dc
+        JOIN
+    regions r ON dc.region_id = r.id
+        JOIN
+    diseases d ON dc.disease_id = d.id
+WHERE
+    disease_name = 'rabies'
+GROUP BY r.entity_code , r.entity_name
+ORDER BY average DESC
+LIMIT 10;
+
+
+--4. Create year difference attribute
+
+SELECT
+    year,
+    MAKEDATE(year, 1) first_yanuary_date,
+    CURDATE() date_current,
+    (YEAR(CURDATE()) - year) year_diff
+FROM
+    disease_cases;
+
+
+--5. Create functions
+
+--5.1 Year difference function 
+
+DROP FUNCTION IF EXISTS calculate_years_difference;
+
+DELIMITER //
+CREATE FUNCTION calculate_years_difference(input_year INT)
+RETURNS INT
+DETERMINISTIC
+READS SQL DATA
+BEGIN
+    DECLARE year_diff INT;
+    DECLARE first_january_date DATE;
+    SET first_january_date = MAKEDATE(input_year, 1);
+    SET year_diff = YEAR(CURDATE()) - YEAR(first_january_date);
+    RETURN year_diff;
+END //
+DELIMITER ;
+
+SELECT
+    year,
+    MAKEDATE(year, 1) first_yanuary_date,
+    CURDATE() date_current,
+    calculate_years_difference(year) year_diff
+FROM
+    disease_cases;
+
+--5.2 Cases per period function 
+
+DROP FUNCTION IF EXISTS calculate_cases_per_period;
+
+DELIMITER //
+CREATE FUNCTION calculate_cases_per_period(yearly_cases INT, period_divisor INT)
+RETURNS DECIMAL(10,2)
+DETERMINISTIC
+READS SQL DATA
+BEGIN
+    DECLARE result DECIMAL(10,2);
+    IF yearly_cases IS NULL OR period_divisor IS NULL OR period_divisor = 0 THEN
+        RETURN NULL;
+    END IF;
+    IF yearly_cases < 0 OR period_divisor < 0 THEN
+        RETURN NULL;
+    END IF;
+    SET result = yearly_cases / period_divisor;
+    RETURN result;
+END //
+DELIMITER ;
+
+SELECT 
+    r.entity_name,
+    d.disease_name,
+    dc.year,
+    dc.number_of_cases AS annual_cases,
+    CALCULATE_CASES_PER_PERIOD(dc.number_of_cases, 12) AS monthly_average,
+    CALCULATE_CASES_PER_PERIOD(dc.number_of_cases, 4) AS quarterly_average,
+    CALCULATE_CASES_PER_PERIOD(dc.number_of_cases, 2) AS half_yearly_average
+FROM
+    disease_cases dc
+        JOIN
+    regions r ON dc.region_id = r.id
+        JOIN
+    diseases d ON dc.disease_id = d.id
+WHERE
+    dc.number_of_cases
+LIMIT 10;
